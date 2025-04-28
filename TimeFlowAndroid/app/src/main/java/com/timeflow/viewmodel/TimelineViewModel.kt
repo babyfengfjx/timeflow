@@ -12,6 +12,8 @@ import com.timeflow.model.TimelineEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.time.ZoneId
 import java.util.*
 
@@ -23,7 +25,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     private val timelineEventDao = database.timelineEventDao()
     
     // 所有事件列表
-    private val _events = mutableStateListOf<TimelineEvent>()
+    private val _events = mutableStateOf<MutableList<TimelineEvent>>(mutableStateListOf())
     val events: List<TimelineEvent> get() =_events
     
     // 搜索关键词
@@ -47,28 +49,33 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
      * 加载事件数据
      */
     private fun loadEvents() {
-        viewModelScope.launch {
-            _events.clear()
-            if (_searchTerm.value.isEmpty() && _selectedEventType.value == null) {
-                timelineEventDao.getAllEvents().collectLatest { entities ->
-                    _events.addAll(entities.map { it.toTimelineEvent() })
+        try {
+            viewModelScope.launch {
+                _events.value.clear()
+                if (_searchTerm.value.isEmpty() && _selectedEventType.value == null) {
+                    timelineEventDao.getAllEvents().collectLatest { entities ->
+                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    }
+                } else if (_searchTerm.value.isNotEmpty() && _selectedEventType.value == null) {
+                    timelineEventDao.searchEvents(_searchTerm.value).collectLatest { entities ->
+                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    }
+                } else if (_searchTerm.value.isEmpty() && _selectedEventType.value != null) {
+                    timelineEventDao.getEventsByType(_selectedEventType.value).collectLatest { entities ->
+                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    }
+                } else {
+                    timelineEventDao.searchEventsByType(_selectedEventType.value!!.name, _searchTerm.value).collectLatest { entities ->
+                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    }.apply { }
                 }
-            } else if (_searchTerm.value.isNotEmpty() && _selectedEventType.value == null) {
-                timelineEventDao.searchEvents(_searchTerm.value).collectLatest { entities ->
-                    _events.addAll(entities.map { it.toTimelineEvent() })
-                }
-            } else if (_searchTerm.value.isEmpty() && _selectedEventType.value != null) {
-                timelineEventDao.getEventsByType(_selectedEventType.value).collectLatest { entities ->
-                    _events.addAll(entities.map { it.toTimelineEvent() })
-                }
-            } else {
-                timelineEventDao.searchEventsByType(_selectedEventType.value!!.name, _searchTerm.value).collectLatest { entities ->
-                    _events.addAll(entities.map { it.toTimelineEvent() })
-                }.apply {}
             }
-         }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _events.clear()
+        }
     }
-
+    
     /**
      * 添加新事件
     **/
@@ -82,8 +89,12 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
             attachment = attachment,
             timestamp = eventTimestamp
         )
-        viewModelScope.launch {
-            timelineEventDao.insertEvent(newEvent.toEntity())
+        try {
+            viewModelScope.launch {
+                timelineEventDao.insertEvent(newEvent.toEntity())
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     
@@ -91,18 +102,26 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
      * 更新事件
      */
     fun updateEvent(updatedEvent: TimelineEvent) {
-        viewModelScope.launch {
-            timelineEventDao.updateEvent(updatedEvent.toEntity())
+        try {
+            viewModelScope.launch {
+                timelineEventDao.updateEvent(updatedEvent.toEntity())
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         _editingEvent.value = null // 清除编辑状态
     }
     
     /**
      * 删除事件
-     */
+    */
     fun deleteEvent(id: String) {
-        viewModelScope.launch {
-            timelineEventDao.deleteEventById(id)
+        try {
+            viewModelScope.launch {
+                timelineEventDao.deleteEventById(id)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     
@@ -133,7 +152,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
      * 获取过滤后的事件列表
      */
     fun getFilteredEvents(): List<TimelineEvent> {
-        return _events
+        return _events.value
     }
     
   /**
@@ -147,10 +166,18 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
             title = title,
             description = description,
             imageUrl = imageUrl,
-            attachmentName = attachment?.name,
+            attachmentName = attachment?.name,    
             timestamp = timestamp
         )
     }
+    
+    /**
+     * 更新事件列表
+     */
+    fun updateEvents(events: List<TimelineEvent>) {
+        _events.value = events.toMutableList()
+    }
+}
    /**
     * 将TimelineEventEntity转换为TimelineEvent
     **/
@@ -162,7 +189,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
             title = title,
             description = description,
             imageUrl = imageUrl,
-            attachment = attachmentName?.let { TimelineEvent.Attachment(it) },
+            attachment = attachmentName?.let { TimelineEvent.Attachment(it) },            
             timestamp = timestamp
         )
     }

@@ -1,43 +1,77 @@
 package com.timeflow.ui.screens
-
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.DismissDirection
+import androidx.compose.material.DismissValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.rememberDismissState
+import androidx.compose.material.swipeable
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment.Companion.CenterVertically
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import androidx.compose.material3.FixedThreshold
+import androidx.compose.material3.swipeable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.timeflow.R
-import com.timeflow.model.EventType
+import androidx.compose.runtime.rememberCoroutineScope
 import com.timeflow.model.TimelineEvent
-import com.timeflow.ui.components.EventTypeChip
-import com.timeflow.ui.screens.EventDetailDialog
+import androidx.compose.runtime.MutableState
+import androidx.compose.ui.geometry.Offset
+import com.timeflow.ui.components.*
 import com.timeflow.viewmodel.TimelineViewModel
+import com.timeflow.model.EventType
+import com.timeflow.R
+import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 
-
-    /**
+/**
  * 时间轴屏幕，显示事件列表、搜索和过滤功能
-     */
+ */
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
 
 
@@ -50,7 +84,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     val events by viewModel.events.collectAsState(initial = emptyList())    
     val searchTerm by viewModel.searchTerm.collectAsState()
     val selectedEventType = viewModel.selectedEventType
-    val editingEvent = viewModel.editingEvent
+    val editingEvent = viewModel.editingEvent 
 
     var showEventDetailDialog by remember { mutableStateOf(false) }
     var selectedEvent by remember { mutableStateOf<TimelineEvent?>(null) }
@@ -62,6 +96,14 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var eventToDelete by remember { mutableStateOf<TimelineEvent?>(null) }
     var searchExpanded by remember { mutableStateOf(false) } 
+    val snackbarHostState = remember { SnackbarHostState() }
+    var draggedItem by remember { mutableStateOf<TimelineEvent?>(null) }
+    var draggedItemOffset by remember { mutableStateOf(0f) }
+
+    val listState = rememberLazyListState()
+
+    val lazyListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
     
     // 当编辑事件变化时更新对话框状态
     LaunchedEffect(editingEvent) {
@@ -70,6 +112,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     
     Scaffold(
         topBar = {
+
             TopAppBar(
                 title = { Text("TimeFlow") },
                 actions = { // 搜索按钮
@@ -103,7 +146,8 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             ) {
                 Icon(Icons.Default.Add, contentDescription = "添加事件")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             // 搜索栏
@@ -146,31 +190,148 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Canvas(modifier = Modifier
                     .fillMaxSize()
-                    .width(1.dp)
                     .align(Alignment.CenterStart)
-                    .padding(start = 40.dp)) {
-                    drawLine(color = MaterialTheme.colorScheme.outline, start = androidx.compose.ui.geometry.Offset(0f, 0f), end = androidx.compose.ui.geometry.Offset(0f, size.height)) 
-                } 
+                    .padding(start = 40.dp).width(1.dp)) {
+                    drawLine(
+                        color = MaterialTheme.colorScheme.outline, 
+                        start = Offset(0f, 0f),
+                        end = Offset(0f, size.height)
+                    )
+                }
+                Canvas(modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.CenterStart)
+                    .padding(start = 40.dp)
+                    .width(1.dp)
+                ) {
+                    drawLine(
+                        color = MaterialTheme.colorScheme.outline, 
+                        start = Offset(0f, 0f),
+                        end = Offset(0f, size.height)
+                    )
+                }   
                 LazyColumn(modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)) {
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .pointerInput(Unit) {
+                        detectDragGesturesAfterLongPress { change, dragAmount ->
+                            val key = change.position
+                            draggedItem = events[events.indexOf(key)]
+                            draggedItemOffset += dragAmount.y
+
+                            val draggedItemIndex = events.indexOf(draggedItem)
+                            if(draggedItemIndex == -1) return@detectDragGesturesAfterLongPress
+                            val newPosition = (draggedItemIndex + (draggedItemOffset / 100f).roundToInt()).coerceIn(0, events.lastIndex)
+
+
+                            if(draggedItemIndex != newPosition){
+
+                                val newList = events.toMutableList()
+                                newList.add(newPosition, newList.removeAt(draggedItemIndex))
+                                viewModel.setEvents(newList.toList())
+
+                            }
+                            draggedItemOffset = 0f
+
+                            change.consumeAllChanges()
+
+
+
+                        }
+
+
+                    }, state = listState) {
                     val groupedEvents = events.groupBy { LocalDate.ofInstant(it.timestamp.toInstant(), ZoneId.systemDefault()) }
-                    groupedEvents.forEach { (date, eventsInDay) ->
+                    groupedEvents.forEach { (date, _) ->
                         item(key = date.toString()) { DateHeader(date = date)}
                     }
+
+                    val dragDropList = remember { mutableStateOf(events.toMutableList()) }
+                    var overscrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) } 
+                    var currentIndexOfDraggedItem by remember { mutableStateOf<Int?>(null) } 
+                    var currentIndexOfDragOverItem by remember { mutableStateOf<Int?>(null) }
                     groupedEvents.forEach { (_, eventsInDay) ->
-                        items(eventsInDay, key = { it.id }) { event ->
-                            TimelineItem( 
-                            event = event,
-                                onEventClick = {  selectedEvent = event
-                                    showEventDetailDialog = true },
-                                onEditClick = { viewModel.setEditingEvent(event) },
-
-                                onDeleteClick = { eventToDelete = event
-                                    showDeleteConfirmDialog = true }
-
+                        itemsIndexed(eventsInDay, key = { _, it -> it.id }) { index, event ->
+                            var itemHeight by remember { mutableStateOf(0) }
+                            var itemOffsetY by remember { mutableStateOf(0) }
+                            val animatedOffsetY by animateDpAsState(
+                                targetValue = if (currentIndexOfDraggedItem == index) itemOffsetY.toDp() else 0.dp
                             )
-                         }
+
+
+                            val haptic = LocalHapticFeedback.current
+
+                            TimelineItem(
+                                event = event, onEventClick = {
+                                    selectedEvent = event
+                                    showEventDetailDialog = true
+                                }, onEditClick = { viewModel.setEditingEvent(event) },
+                                onDeleteClick = {
+                                    eventToDelete = event
+                                    showDeleteConfirmDialog = true
+                                }, modifier = Modifier
+                                    .zIndex(if (draggedItem?.id == event.id) 1f else 0f)
+                                    .offset(y = draggedItemOffset.roundToInt().dp)
+                                    .offset { IntOffset(0, animatedOffsetY.roundToPx()) }
+                                    .pointerInput(Unit) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { offset ->
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                currentIndexOfDraggedItem = index
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                val draggedItem = dragDropList.value[index]
+                                                val draggedItemIndex = dragDropList.value.indexOf(draggedItem)
+
+                                                coroutineScope.launch {
+                                                    val scrollOffset = 24f
+                                                    if (dragAmount.y > 0 && lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 < groupedEvents.flatMap { it.value }.lastIndex) {
+                                                        overscrollJob?.cancel()
+                                                        overscrollJob = launch {
+                                                            lazyListState.scrollBy(scrollOffset)
+                                                        }
+                                                    }
+                                                    if (dragAmount.y < 0 && lazyListState.firstVisibleItemIndex > 0) {
+                                                        overscrollJob?.cancel()
+                                                        overscrollJob = launch {
+                                                            lazyListState.scrollBy(-scrollOffset)
+                                                        }
+                                                    }
+                                                }
+
+                                                itemOffsetY += dragAmount.y.toInt()
+                                                dragDropList.value.forEachIndexed { i, item ->
+                                                    if (item != draggedItem && index != i) {
+                                                        val draggedItemTop = itemOffsetY.coerceAtMost(itemHeight * (draggedItemIndex))
+                                                        val draggedItemBottom = itemOffsetY.coerceAtLeast(itemHeight * (draggedItemIndex + 1))
+
+                                                        if (draggedItemTop <= itemHeight * i && draggedItemBottom >= itemHeight * i) {
+                                                            currentIndexOfDragOverItem = i
+                                                            reorder(dragDropList, draggedItemIndex, i)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                overscrollJob?.cancel()
+                                                itemOffsetY = 0
+                                                currentIndexOfDraggedItem = null
+                                                currentIndexOfDragOverItem = null
+                                            },
+                                            onDragEnd = {
+                                                overscrollJob?.cancel()
+                                                itemOffsetY = 0
+                                                if (currentIndexOfDragOverItem != null && currentIndexOfDraggedItem != null) {
+                                                    reorder(dragDropList, currentIndexOfDraggedItem!!, currentIndexOfDragOverItem!!)
+                                                }
+                                                currentIndexOfDraggedItem = null
+                                                currentIndexOfDragOverItem = null
+                                            }
+                                        )
+                                    }
+                            )
+                        }
                         }
                     )
                 }
@@ -212,7 +373,18 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             event = null,
             onDismiss = { showAddEventDialog = false },
             onSave = { eventType, description, imageUrl, attachment, eventTimestamp ->
-                viewModel.addEvent(eventType, description, imageUrl, attachment, eventTimestamp)
+                try {
+
+                    viewModel.addEvent(eventType, description, imageUrl, attachment, eventTimestamp)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "An error has occurred.", duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+
                 showAddEventDialog = false
             }
         )
@@ -235,7 +407,18 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     attachment = attachment,
                     timestamp = eventTimestamp
                 )
-                viewModel.updateEvent(updatedEvent)
+                try {
+
+                    viewModel.updateEvent(updatedEvent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "An error has occurred.", duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+
                 showEditEventDialog = false
             }
         )
@@ -253,7 +436,18 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        eventToDelete?.id?.let { viewModel.deleteEvent(it) }
+                        try {
+                            eventToDelete?.id?.let { viewModel.deleteEvent(it) }
+
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "An error has occurred.", duration = SnackbarDuration.Short
+                                )
+                            }
+                        }
+
                         showDeleteConfirmDialog = false
                         eventToDelete = null
                     }
@@ -273,168 +467,337 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             }
         )
     }
-    
-    // 事件详情对话框
+
+
     if (showEventDetailDialog && selectedEvent != null) {
         EventDetailDialog(
             event = selectedEvent!!,
-            onDismiss = {
-                showEventDetailDialog = false
-                selectedEvent = null
+            onDismiss = { showEventDetailDialog = false
 
             }
         })
     }
 }
 
+private fun reorder(list: MutableState<MutableList<TimelineEvent>>, from: Int, to: Int) {
+    val newList = list.value.toMutableList()
+    newList.add(to, newList.removeAt(from))
+    list.value = newList
+}
+
 /**
- * 时间轴项目组件
+ * TimeLine item
  */
-@Composable 
-fun TimelineItem(event: TimelineEvent, onEventClick: () -> Unit, onEditClick: () -> Unit, onDeleteClick: () -> Unit) { 
-
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@Composable  
+fun TimelineItem(event: TimelineEvent, onEventClick: () -> Unit, onEditClick: () -> Unit, onDeleteClick: () -> Unit, modifier: Modifier) {
     val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    val localDateTime: LocalDateTime =
-        event.timestamp.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Canvas(
-        modifier = Modifier
-                .clickable {
-                    onEventClick() 
-                }
-                .padding(top = 16.dp), onDraw = {
-            drawCircle(
-                color = MaterialTheme.colorScheme.primary,
-                radius = 8.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(
-                    size.width / 2 - 40.dp.toPx(), 0f
-                )
+    val localDateTime: LocalDateTime = event.timestamp.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+    val swipeableState = rememberSwipeableState(initialValue = 0)
+    val anchors = mapOf( 
+        -100.dp.toPx() to -1,
+        0f to 0, 
+        100.dp.toPx() to 1
+    )
+    val offset = swipeableState.offset.value
+val dismissState = rememberDismissState(
+    confirmStateChange = {
+        if (it == DismissValue.DismissedToStart) {
+            onDeleteClick()
+            true
+        } else {
+            false
+        }
+    }
+    )
+    SwipeToDismiss(
+        state = dismissState,
+        background = {
+            val direction = dismissState.dismissDirection ?: return@SwipeToDismiss
+            val color by animateColorAsState(
+                when (dismissState.targetValue) {
+                    DismissValue.Default -> Color.LightGray
+                    DismissValue.DismissedToEnd -> Color.Green
+                    DismissValue.DismissedToStart -> Color.Red
+                }, label = ""
             )
-            drawLine(color = MaterialTheme.colorScheme.outline, start = androidx.compose.ui.geometry.Offset(size.width / 2 - 40.dp.toPx(), 0f), end = androidx.compose.ui.geometry.Offset(size.width / 2 - 40.dp.toPx(), size.height)) 
-        })
-
-        Card(
-
-            modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp).clickable { onEventClick() },
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // 头部：类型图标、标题和时间
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            val alignment = when (direction) {
+                DismissDirection.StartToEnd -> Alignment.CenterStart
+                DismissDirection.EndToStart -> Alignment.CenterEnd
+            }
+            val icon = when (direction) {
+                DismissDirection.StartToEnd -> Icons.Default.Edit
+                DismissDirection.EndToStart -> Icons.Default.Delete
+            }
+            val scale by animateFloatAsState(
+                if (dismissState.targetValue == DismissValue.Default) 0.75f else 1f, label = ""
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(color)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 事件类型图标
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(getEventTypeColor(event.eventType).copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = getEventTypeIcon(event.eventType),
-                            contentDescription = null,
-                            tint = getEventTypeColor(event.eventType),
-                            modifier = Modifier.size(18.dp)
+                Icon(
+                    icon,
+                    contentDescription = "Localized description",
+                    modifier = Modifier.scale(scale)
+                    )
+            }
+        },
+        dismissContent = {
+            Box(modifier = modifier.then(Modifier.fillMaxWidth())) {
+                Row(modifier = Modifier.fillMaxWidth().clickable {onEventClick()}) {
+                    Canvas(modifier = Modifier.padding(top = 16.dp), onDraw = {
+                        drawCircle(
+                            color = MaterialTheme.colorScheme.primary, radius = 8.dp.toPx(), center = Offset(size.width / 2 - 40.dp.toPx(), 0f)
+                        )
+                        drawLine(color = MaterialTheme.colorScheme.outline, start = Offset(size.width / 2 - 40.dp.toPx(), 0f), end = Offset(size.width / 2 - 40.dp.toPx(), size.height))
+                    })
+                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).clickable {onEventClick()}, shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = CenterVertically) {
+                                Row(verticalAlignment = CenterVertically) {
+                                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(getEventTypeColor(event.eventType).copy(alpha = 0.1f)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                        Icon(imageVector = getEventTypeIcon(event.eventType), contentDescription = null, tint = getEventTypeColor(event.eventType), modifier = Modifier.size(18.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(text = event.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Text(text = dateTimeFormatter.format(localDateTime), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(text = event.description, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 4.dp))
+                            if (!event.imageUrl.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                AsyncImage(model = event.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(8.dp)))
+                            }
+                            event.attachment?.let { attachment ->
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(12.dp), verticalAlignment = CenterVertically) {
+                                    Icon(imageVector = Icons.Outlined.AttachFile, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(text = attachment.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                }
+            }
+        },
+        directions = setOf(DismissDirection.EndToStart),
+    )
+    }
+}
+
+@Composable
+fun DateHeader(date: LocalDate) {
+    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
+    val formattedDate = date.format(dateFormatter)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = CenterVertically
+    ) {
+        Spacer(modifier = Modifier.width(80.dp))
+        Text(text = formattedDate, style = MaterialTheme.typography.headlineSmall)
+    }
+}
+
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // 标题
+                            Text(
+                                text = event.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        // 时间
+                        Text(
+                            text = dateTimeFormatter.format(localDateTime),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    // 标题
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // 描述
                     Text(
-                        text = event.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                // 时间
-                Text(
-                    text = dateTimeFormatter.format(localDateTime),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // 描述
-            Text(
-                text = event.description,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp)
-            )
-            
-            // 图片（如果有）
-            if (!event.imageUrl.isNullOrEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                AsyncImage(
-                    model = event.imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-            }
-            
-            // 附件（如果有）
-            event.attachment?.let { attachment ->
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AttachFile,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = attachment.name,
+                        text = event.description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.padding(start = 4.dp)
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                // 编辑按钮
-                IconButton(onClick = onEditClick) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "编辑",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                // 删除按钮
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    // Image
+                    if (!event.imageUrl.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AsyncImage(
+                            model = event.imageUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+                    // Attachment
+                    event.attachment?.let { attachment ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AttachFile,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = attachment.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // 操作按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                        , horizontalArrangement = Arrangement.End , verticalAlignment = Alignment.CenterVertically
+                    ) {
+                    }
                 }
             }
         }
+    }
+        
+        
+    }
+        
+        
+    }
+}
+
+
+@Composable
+fun DateHeader(date: LocalDate) {
+    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
+    val formattedDate = date.format(dateFormatter)
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(modifier = Modifier.width(80.dp))
+        Text(
+            text = formattedDate,
+            style = MaterialTheme.typography.headlineSmall
+        )
+    }
+}
+
+/**
+ * 过滤下拉菜单
+ */
+@Composable
+fun FilterDropdownMenu(
+    selectedEventType: EventType?,
+    onEventTypeSelected: (EventType?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss
+    ) {
+        DropdownMenuItem(
+            text = { Text("全部") },
+            onClick = { onEventTypeSelected(null) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.List,
+                    contentDescription = null
+                )
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("笔记") },
+            onClick = { onEventTypeSelected(EventType.NOTE) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Note,
+                    contentDescription = null
+                )
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("待办") },
+            onClick = { onEventTypeSelected(EventType.TODO) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.CheckBox,
+                    contentDescription = null
+                )
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("日程") },
+            onClick = { onEventTypeSelected(EventType.SCHEDULE) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Event,
+                    contentDescription = null
+                )
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("备忘录") },
+            onClick = { onEventTypeSelected(EventType.MEMO) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Outlined.EditNote,
+                    contentDescription = null
+                )
+            }
+        )
+    }
+}
+
+/**
+ * Get the correct icon from the eventType
+ */
+@Composable
+fun getEventTypeIcon(eventType: EventType) = when (eventType) {
+    EventType.NOTE -> Icons.Outlined.Note
+    EventType.TODO -> Icons.Outlined.CheckBox
+    EventType.SCHEDULE -> Icons.Outlined.Event
+    EventType.MEMO -> Icons.Outlined.EditNote
+}
+
+/**
+ * 获取事件类型对应的颜色
+ */
+@Composable
+fun getEventTypeColor(eventType: EventType) = when (eventType) {
+    EventType.NOTE -> MaterialTheme.colorScheme.tertiary
+    EventType.TODO -> MaterialTheme.colorScheme.primary
+    EventType.SCHEDULE -> MaterialTheme.colorScheme.secondary
+    EventType.MEMO -> MaterialTheme.colorScheme.surfaceTint
+}
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "删除",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+        }
+    }
+    }
     }
 }
 
