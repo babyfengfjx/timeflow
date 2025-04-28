@@ -1,5 +1,8 @@
 package com.timeflow.ui.screens
+
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,101 +11,107 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.DismissDirection
-import androidx.compose.material.DismissValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Note
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.DismissDirection
+import androidx.compose.material.DismissValue
 import androidx.compose.material.rememberDismissState
-import androidx.compose.material.swipeable
 import androidx.compose.material3.*
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment.Companion.CenterVertically
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.FixedThreshold
-import androidx.compose.material3.swipeable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color.Companion.Red
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
+import coil.compose.AsyncImage
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.rememberCoroutineScope
+import com.timeflow.R
 import com.timeflow.model.TimelineEvent
+import androidx.compose.material.swipeable
 import androidx.compose.runtime.MutableState
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.rememberCoroutineScope
 import com.timeflow.ui.components.*
 import com.timeflow.viewmodel.TimelineViewModel
-import com.timeflow.model.EventType
-import com.timeflow.R
-import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.SwipeToDismiss
 import android.widget.Toast
+import androidx.compose.material.rememberDismissState
+import java.time.LocalDate
+import kotlin.math.roundToInt
 
 /**
- * 时间轴屏幕，显示事件列表、搜索和过滤功能
+ * TimelineScreen composable function.
+ * This function is responsible for displaying the timeline,
+ * including the list of events, search, and filter functionalities.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-
-
 fun TimelineScreen(viewModel: TimelineViewModel) {
-
+    // Load events when the screen is first launched.
     LaunchedEffect(Unit) {
         viewModel.loadEvents()
     }
 
-    val events by viewModel.events.collectAsState(initial = emptyList())    
+    // Collect events from the ViewModel.
+    val events by viewModel.events.collectAsState(initial = emptyList())
+    // Collect the search term from the ViewModel.
     val searchTerm by viewModel.searchTerm.collectAsState()
+    // Get the selected event type from the ViewModel.
     val selectedEventType = viewModel.selectedEventType
-    val editingEvent = viewModel.editingEvent 
-
+    // Get the event being edited from the ViewModel.
+    val editingEvent = viewModel.editingEvent
+    // State to control the visibility of the event detail dialog.
     var showEventDetailDialog by remember { mutableStateOf(false) }
+    // State to store the currently selected event.
     var selectedEvent by remember { mutableStateOf<TimelineEvent?>(null) }
+    // State to control the visibility of the settings dialog.
     var showSettingDialog by remember { mutableStateOf(false) }
+    // State to manage the dark theme.
     var isDarkTheme by remember { mutableStateOf(false) }
-
+    // State to control the visibility of the add event dialog.
     var showAddEventDialog by remember { mutableStateOf(false) }
+    // State to control the visibility of the edit event dialog.
     var showEditEventDialog by remember { mutableStateOf(false) }
+    // State to control the visibility of the delete confirmation dialog.
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    // State to store the event to be deleted.
     var eventToDelete by remember { mutableStateOf<TimelineEvent?>(null) }
-    var searchExpanded by remember { mutableStateOf(false) } 
-    val snackbarHostState = remember { SnackbarHostState() }
-    var draggedItem by remember { mutableStateOf<TimelineEvent?>(null) }
-    var draggedItemOffset by remember { mutableStateOf(0f) }
-
-    val listState = rememberLazyListState()
-
-    val lazyListState = rememberLazyListState()
+    // Remember the coroutine scope.
     val coroutineScope = rememberCoroutineScope()
     
     // 当编辑事件变化时更新对话框状态
@@ -110,8 +119,21 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
         showEditEventDialog = editingEvent != null
     }
     
+    // State to control the search bar expansion.
+    var searchExpanded by remember { mutableStateOf(false) }
+
+    // State to manage the Snackbar.
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // State for drag and drop.
+    var draggedItem by remember { mutableStateOf<TimelineEvent?>(null) }
+    var draggedItemOffset by remember { mutableStateOf(0f) }
+    // State of the LazyColumn
+    val listState = rememberLazyListState()
+
     Scaffold(
         topBar = {
+            // Top app bar of the screen.
 
             TopAppBar(
                 title = { Text("TimeFlow") },
@@ -120,13 +142,13 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                         Icon(Icons.Outlined.Settings, contentDescription = "设置")
                     }
                     // 设置对话框
-                    if (showSettingDialog) {
-                        SettingDialog(onDismiss = { showSettingDialog = false }, onThemeChange = {isDarkTheme = it}, isDarkTheme = isDarkTheme)
-                    }
+                    if (showSettingDialog) SettingDialog(
+                        onDismiss = { showSettingDialog = false },
+                        onThemeChange = { isDarkTheme = it },
+                        isDarkTheme = isDarkTheme
+                    )
 
-                    // 搜索按钮
-                    IconButton(onClick = {
-                        searchExpanded = !searchExpanded
+                    IconButton(onClick = { searchExpanded = !searchExpanded
                     }) {
                         Icon(Icons.Default.Search, contentDescription = "搜索")
                     }
@@ -139,12 +161,14 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 }
             )
         },
+        // Floating action button to add a new event.
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddEventDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "添加事件")
+                Icon(Icons.Default.Add, contentDescription = "添加事件"
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -184,35 +208,35 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     onDismiss = { showFilterMenu = false }
                 )
             }
-            
-            
-            // 时间轴列表 
+
+            // TimeLine
             Box(modifier = Modifier.fillMaxSize()) {
+                //Vertical Line
                 Canvas(modifier = Modifier
                     .fillMaxSize()
                     .align(Alignment.CenterStart)
-                    .padding(start = 40.dp).width(1.dp)) {
-                    drawLine(
-                        color = MaterialTheme.colorScheme.outline, 
-                        start = Offset(0f, 0f),
-                        end = Offset(0f, size.height)
-                    )
+                    .padding(start = 40.dp)
+                    .width(1.dp)) {
+                    drawLine(color = MaterialTheme.colorScheme.outline, start = Offset(0f, 0f), end = Offset(0f, size.height))
                 }
+                //LazyColumn
                 Canvas(modifier = Modifier
                     .fillMaxSize()
                     .align(Alignment.CenterStart)
                     .padding(start = 40.dp)
                     .width(1.dp)
-                ) {
+                ) { // Vertical Line
                     drawLine(
-                        color = MaterialTheme.colorScheme.outline, 
+                        color = MaterialTheme.colorScheme.outline,
                         start = Offset(0f, 0f),
                         end = Offset(0f, size.height)
                     )
                 }   
                 LazyColumn(modifier = Modifier
+                    //Fill all size
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
+                    //Detect when the user start dragging an item
                     .pointerInput(Unit) {
                         detectDragGesturesAfterLongPress { change, dragAmount ->
                             val key = change.position
@@ -223,121 +247,46 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                             if(draggedItemIndex == -1) return@detectDragGesturesAfterLongPress
                             val newPosition = (draggedItemIndex + (draggedItemOffset / 100f).roundToInt()).coerceIn(0, events.lastIndex)
 
-
+                            //Check if the item is moved
                             if(draggedItemIndex != newPosition){
-
+                                //Add the new item in the list
                                 val newList = events.toMutableList()
                                 newList.add(newPosition, newList.removeAt(draggedItemIndex))
-                                viewModel.setEvents(newList.toList())
-
+                                events = newList
+                                viewModel.updateEvents(newList)
                             }
+                            //Reset the offset
                             draggedItemOffset = 0f
-
-                            change.consumeAllChanges()
-
-
-
+                            change.consumeAllChanges() 
                         }
-
-
                     }, state = listState) {
                     val groupedEvents = events.groupBy { LocalDate.ofInstant(it.timestamp.toInstant(), ZoneId.systemDefault()) }
-                    groupedEvents.forEach { (date, _) ->
-                        item(key = date.toString()) { DateHeader(date = date)}
+                    groupedEvents.forEach { (date, _) -> 
+                        item(key = date.toString()) { DateHeader(date = date) }
                     }
-
-                    val dragDropList = remember { mutableStateOf(events.toMutableList()) }
-                    var overscrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) } 
-                    var currentIndexOfDraggedItem by remember { mutableStateOf<Int?>(null) } 
-                    var currentIndexOfDragOverItem by remember { mutableStateOf<Int?>(null) }
-                    groupedEvents.forEach { (_, eventsInDay) ->
-                        itemsIndexed(eventsInDay, key = { _, it -> it.id }) { index, event ->
-                            var itemHeight by remember { mutableStateOf(0) }
-                            var itemOffsetY by remember { mutableStateOf(0) }
-                            val animatedOffsetY by animateDpAsState(
-                                targetValue = if (currentIndexOfDraggedItem == index) itemOffsetY.toDp() else 0.dp
-                            )
-
-
-                            val haptic = LocalHapticFeedback.current
-
-                            TimelineItem(
-                                event = event, onEventClick = {
+                    groupedEvents.forEach { (_, eventsInDay) -> 
+                        itemsIndexed(eventsInDay, key = { _, it -> it.id }) { _, event ->
+                            TimelineItem(event = event,
+                                onEventClick = {
                                     selectedEvent = event
                                     showEventDetailDialog = true
-                                }, onEditClick = { viewModel.setEditingEvent(event) },
+                                },
+                                onEditClick = { viewModel.setEditingEvent(event) },
                                 onDeleteClick = {
                                     eventToDelete = event
                                     showDeleteConfirmDialog = true
-                                }, modifier = Modifier
+                                },
+                                modifier = Modifier
+                                    // Change zIndex to show the dragged item above the other items
                                     .zIndex(if (draggedItem?.id == event.id) 1f else 0f)
-                                    .offset(y = draggedItemOffset.roundToInt().dp)
-                                    .offset { IntOffset(0, animatedOffsetY.roundToPx()) }
-                                    .pointerInput(Unit) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { offset ->
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                currentIndexOfDraggedItem = index
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                val draggedItem = dragDropList.value[index]
-                                                val draggedItemIndex = dragDropList.value.indexOf(draggedItem)
-
-                                                coroutineScope.launch {
-                                                    val scrollOffset = 24f
-                                                    if (dragAmount.y > 0 && lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 < groupedEvents.flatMap { it.value }.lastIndex) {
-                                                        overscrollJob?.cancel()
-                                                        overscrollJob = launch {
-                                                            lazyListState.scrollBy(scrollOffset)
-                                                        }
-                                                    }
-                                                    if (dragAmount.y < 0 && lazyListState.firstVisibleItemIndex > 0) {
-                                                        overscrollJob?.cancel()
-                                                        overscrollJob = launch {
-                                                            lazyListState.scrollBy(-scrollOffset)
-                                                        }
-                                                    }
-                                                }
-
-                                                itemOffsetY += dragAmount.y.toInt()
-                                                dragDropList.value.forEachIndexed { i, item ->
-                                                    if (item != draggedItem && index != i) {
-                                                        val draggedItemTop = itemOffsetY.coerceAtMost(itemHeight * (draggedItemIndex))
-                                                        val draggedItemBottom = itemOffsetY.coerceAtLeast(itemHeight * (draggedItemIndex + 1))
-
-                                                        if (draggedItemTop <= itemHeight * i && draggedItemBottom >= itemHeight * i) {
-                                                            currentIndexOfDragOverItem = i
-                                                            reorder(dragDropList, draggedItemIndex, i)
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                overscrollJob?.cancel()
-                                                itemOffsetY = 0
-                                                currentIndexOfDraggedItem = null
-                                                currentIndexOfDragOverItem = null
-                                            },
-                                            onDragEnd = {
-                                                overscrollJob?.cancel()
-                                                itemOffsetY = 0
-                                                if (currentIndexOfDragOverItem != null && currentIndexOfDraggedItem != null) {
-                                                    reorder(dragDropList, currentIndexOfDraggedItem!!, currentIndexOfDragOverItem!!)
-                                                }
-                                                currentIndexOfDraggedItem = null
-                                                currentIndexOfDragOverItem = null
-                                            }
-                                        )
-                                    }
-                            )
+                                    //Move the item in the y axis
+                                    .offset(y = draggedItemOffset.roundToInt().dp))
                         }
-                        }
-                    )
+                    }
+                    }
                 }
-            }
-            
-            // 空状态提示
+
+            // Show the empty state when the list is empty
             if (events.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -346,28 +295,26 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    androidx.compose.foundation.Image(
+                    // Empty Image
+                    Image(
                         painter = painterResource(id = R.drawable.empty),
                         contentDescription = "Empty Timeline",
                         modifier = Modifier.size(200.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
+                    // Text to show in the empty state
                     Text(
-                        text = if (searchTerm.isNotEmpty() || selectedEventType != null) {
-                            "没有找到匹配的事件"
-                        } else {
-                            "开始添加事件到您的时间轴"
-                        },
+                        text = "No events yet. Click the + button to add a new event.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
                     )
                 }
             }
         }
-        
     }
     
-    // 添加事件对话框
+    // Add event dialog.
     if (showAddEventDialog) {
         EventDialog(
             event = null,
@@ -388,10 +335,12 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 showAddEventDialog = false
             }
         )
-    }
+    } 
     
-    // 编辑事件对话框
+    // Edit event dialog.
     if (showEditEventDialog && editingEvent != null) {
+        // Edit event dialog.
+
         EventDialog(
             event = editingEvent,
             onDismiss = { 
@@ -424,27 +373,28 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
         )
     }
     
-    // 删除确认对话框
-    if (showDeleteConfirmDialog && eventToDelete != null) {
+    // Show delete confirmation dialog.
+   if (showDeleteConfirmDialog && eventToDelete != null) {
         AlertDialog(
             onDismissRequest = { 
                 showDeleteConfirmDialog = false 
                 eventToDelete = null
             },
-            title = { Text("确认删除") },
+            title = { Text("确认删除") }, 
             text = { Text("确定要删除事件 '${eventToDelete?.title}' 吗？") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        try {
-                            eventToDelete?.id?.let { viewModel.deleteEvent(it) }
-
-                        } catch (e: Exception) {
+                TextButton(onClick = {
+                    try {
+                        // Delete the event from the ViewModel.
+                        eventToDelete?.id?.let { viewModel.deleteEvent(it) }
+                    } catch (e: Exception) {
+                        // Print stacktrace
                             e.printStackTrace()
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
+                                    snackbarHostState.showSnackbar(
                                     "An error has occurred.", duration = SnackbarDuration.Short
                                 )
+                        eventToDelete?.id?.let { viewModel.deleteEvent(it) }
                             }
                         }
 
@@ -468,7 +418,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
         )
     }
 
-
     if (showEventDetailDialog && selectedEvent != null) {
         EventDetailDialog(
             event = selectedEvent!!,
@@ -477,44 +426,52 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             }
         })
     }
-}
+ }
 
+/**
+* Reorder the item.
+*/
 private fun reorder(list: MutableState<MutableList<TimelineEvent>>, from: Int, to: Int) {
     val newList = list.value.toMutableList()
     newList.add(to, newList.removeAt(from))
-    list.value = newList
 }
 
 /**
  * TimeLine item
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable  
 fun TimelineItem(event: TimelineEvent, onEventClick: () -> Unit, onEditClick: () -> Unit, onDeleteClick: () -> Unit, modifier: Modifier) {
     val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     val localDateTime: LocalDateTime = event.timestamp.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-    val swipeableState = rememberSwipeableState(initialValue = 0)
-    val anchors = mapOf( 
-        -100.dp.toPx() to -1,
-        0f to 0, 
-        100.dp.toPx() to 1
-    )
-    val offset = swipeableState.offset.value
-val dismissState = rememberDismissState(
-    confirmStateChange = {
-        if (it == DismissValue.DismissedToStart) {
-            onDeleteClick()
-            true
-        } else {
-            false
-        }
+    //Dismiss state of the item
+    val dismissState = rememberDismissState(initialValue = DismissValue.Default)
+    
+    if (dismissState.isDismissed(DismissDirection.EndToStart)) {
+        onDeleteClick()
     }
-    )
+
+    SwipeToDismiss(
+        state = dismissState,
+        modifier = Modifier
+            .padding(vertical = 4.dp),
+        directions = setOf(DismissDirection.EndToStart),
+        dismissContent = {
+                Row(
+                    modifier = modifier
+                        .fillMaxWidth()
+                ) {
+                }
+            },
+            background = {
     SwipeToDismiss(
         state = dismissState,
         background = {
             val direction = dismissState.dismissDirection ?: return@SwipeToDismiss
             val color by animateColorAsState(
+                label = ""
+            val alignment = when (direction) {
+                DismissDirection.StartToEnd -> Alignment.CenterStart
                 when (dismissState.targetValue) {
                     DismissValue.Default -> Color.LightGray
                     DismissValue.DismissedToEnd -> Color.Green
@@ -527,7 +484,7 @@ val dismissState = rememberDismissState(
             }
             val icon = when (direction) {
                 DismissDirection.StartToEnd -> Icons.Default.Edit
-                DismissDirection.EndToStart -> Icons.Default.Delete
+                DismissDirection.EndToStart -> Icons.Filled.Trash
             }
             val scale by animateFloatAsState(
                 if (dismissState.targetValue == DismissValue.Default) 0.75f else 1f, label = ""
@@ -540,7 +497,7 @@ val dismissState = rememberDismissState(
                 contentAlignment = alignment
             ) {
                 Icon(
-                    icon,
+                    imageVector = icon,
                     contentDescription = "Localized description",
                     modifier = Modifier.scale(scale)
                     )
@@ -590,6 +547,7 @@ val dismissState = rememberDismissState(
         directions = setOf(DismissDirection.EndToStart),
     )
     }
+
 }
 
 @Composable
@@ -605,35 +563,14 @@ fun DateHeader(date: LocalDate) {
     }
 }
 
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            // 标题
-                            Text(
-                                text = event.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        // 时间
-                        Text(
-                            text = dateTimeFormatter.format(localDateTime),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // 描述
-                    Text(
-                        text = event.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
-                    // Image
-                    if (!event.imageUrl.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        AsyncImage(
+@Composable
+fun DateHeader(date: LocalDate) {
+    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
+    val formattedDate = date.format(dateFormatter)
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(modifier = Modifier.width(80.dp))
+        Text(
+            text = formattedDate,
                             model = event.imageUrl,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
@@ -642,7 +579,6 @@ fun DateHeader(date: LocalDate) {
                                 .height(180.dp)
                                 .clip(RoundedCornerShape(8.dp))
                         )
-                    }
                     // Attachment
                     event.attachment?.let { attachment ->
                         Spacer(modifier = Modifier.height(12.dp))
@@ -666,231 +602,50 @@ fun DateHeader(date: LocalDate) {
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    // 操作按钮
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                        , horizontalArrangement = Arrangement.End , verticalAlignment = Alignment.CenterVertically
-                    ) {
-                    }
-                }
-            }
-        }
-    }
-        
-        
-    }
-        
-        
-    }
-}
-
-
-@Composable
-fun DateHeader(date: LocalDate) {
-    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
-    val formattedDate = date.format(dateFormatter)
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
-    ) {
-        Spacer(modifier = Modifier.width(80.dp))
-        Text(
-            text = formattedDate,
-            style = MaterialTheme.typography.headlineSmall
         )
     }
 }
 
 /**
- * 过滤下拉菜单
+ * FilterDropdownMenu composable function.
+ * This function is responsible for displaying a dropdown menu to filter the events.
  */
 @Composable
 fun FilterDropdownMenu(
     selectedEventType: EventType?,
     onEventTypeSelected: (EventType?) -> Unit,
     onDismiss: () -> Unit
-) {
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss
-    ) {
-        DropdownMenuItem(
-            text = { Text("全部") },
-            onClick = { onEventTypeSelected(null) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.List,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("笔记") },
-            onClick = { onEventTypeSelected(EventType.NOTE) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Note,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("待办") },
-            onClick = { onEventTypeSelected(EventType.TODO) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.CheckBox,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("日程") },
-            onClick = { onEventTypeSelected(EventType.SCHEDULE) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Event,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("备忘录") },
-            onClick = { onEventTypeSelected(EventType.MEMO) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Outlined.EditNote,
-                    contentDescription = null
-                )
-            }
-        )
+) { // Filter dropdown menu.
+    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        DropdownMenuItem(text = { Text("全部") }, onClick = { onEventTypeSelected(null) }, leadingIcon = { Icon(imageVector = Icons.Default.List, contentDescription = null) })
+        DropdownMenuItem(text = { Text("笔记") }, onClick = { onEventTypeSelected(EventType.NOTE) }, leadingIcon = { Icon(imageVector = Icons.Default.Note, contentDescription = null) })
+        DropdownMenuItem(text = { Text("待办") }, onClick = { onEventTypeSelected(EventType.TODO) }, leadingIcon = { Icon(imageVector = Icons.Default.CheckBox, contentDescription = null) })
+        DropdownMenuItem(text = { Text("日程") }, onClick = { onEventTypeSelected(EventType.SCHEDULE) }, leadingIcon = { Icon(imageVector = Icons.Default.Event, contentDescription = null) })
+        DropdownMenuItem(text = { Text("备忘录") }, onClick = { onEventTypeSelected(EventType.MEMO) }, leadingIcon = { Icon(imageVector = Icons.Outlined.EditNote, contentDescription = null) })
     }
+
 }
 
 /**
- * Get the correct icon from the eventType
+ * Get the correct icon from the eventType.
  */
 @Composable
 fun getEventTypeIcon(eventType: EventType) = when (eventType) {
     EventType.NOTE -> Icons.Outlined.Note
-    EventType.TODO -> Icons.Outlined.CheckBox
+    EventType.TODO -> Icons.Outlined.CheckBox 
+    EventType.SCHEDULE -> Icons.Outlined.Event
+    EventType.MEMO -> Icons.Outlined.EditNote
     EventType.SCHEDULE -> Icons.Outlined.Event
     EventType.MEMO -> Icons.Outlined.EditNote
 }
 
 /**
- * 获取事件类型对应的颜色
+ * Get the color from the eventType.
  */
 @Composable
 fun getEventTypeColor(eventType: EventType) = when (eventType) {
     EventType.NOTE -> MaterialTheme.colorScheme.tertiary
-    EventType.TODO -> MaterialTheme.colorScheme.primary
-    EventType.SCHEDULE -> MaterialTheme.colorScheme.secondary
     EventType.MEMO -> MaterialTheme.colorScheme.surfaceTint
-}
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "删除",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-        }
-        }
-    }
-    }
-    }
-}
-
-
-@Composable
-fun DateHeader(date: LocalDate) {
-    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
-    val formattedDate = date.format(dateFormatter)
-    Row(modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Spacer(modifier = Modifier.width(80.dp))
-        Text( 
-            text = formattedDate,
-            style = MaterialTheme.typography.headlineSmall
-        )
-    }
-}
-
-/**
- * 过滤下拉菜单
- */
-@Composable
-fun FilterDropdownMenu(
-    selectedEventType: EventType?,
-    onEventTypeSelected: (EventType?) -> Unit,
-    onDismiss: () -> Unit
-) {
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss
-    ) {
-        DropdownMenuItem(
-            text = { Text("全部") },
-            onClick = { onEventTypeSelected(null) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.List,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("笔记") },
-            onClick = { onEventTypeSelected(EventType.NOTE) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Note,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("待办") },
-            onClick = { onEventTypeSelected(EventType.TODO) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.CheckBox,
-                    contentDescription = null
-                )
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("日程") },
-            onClick = { onEventTypeSelected(EventType.SCHEDULE) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Event,
-                    contentDescription = null
-                )
-            }
-        )
-    }
-}
-
-/**
- * Get the correct icon from the eventType
- */
-@Composable
-fun getEventTypeIcon(eventType: EventType) = when (eventType) {
-    EventType.NOTE -> Icons.Outlined.Note
-    TODO -> Icons.Outlined.CheckBox
-    SCHEDULE -> Icons.Outlined.Event
-    MEMO -> Icons.Outlined.EditNote
-}
-
-/**
- * 获取事件类型对应的颜色
- */
-@Composable
-fun getEventTypeColor(eventType: EventType) = when (eventType) {
-    EventType.NOTE -> MaterialTheme.colorScheme.tertiary
-    EventType.TODO -> MaterialTheme.colorScheme.primary
     EventType.SCHEDULE -> MaterialTheme.colorScheme.secondary
     EventType.MEMO -> MaterialTheme.colorScheme.surfaceTint
 }

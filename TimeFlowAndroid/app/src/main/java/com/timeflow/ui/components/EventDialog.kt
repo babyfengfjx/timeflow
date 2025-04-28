@@ -31,6 +31,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 
+
 /**
  * 事件编辑对话框，用于添加和编辑事件
  */
@@ -41,20 +42,31 @@ fun EventDialog(
     event: TimelineEvent?,
     onDismiss: () -> Unit,
     onSave: (EventType, String, String?, TimelineEvent.Attachment?, Date) -> Unit
-) {
+) {    
+    // State variable to manage the selected date
     var selectedDate by remember { mutableStateOf(event?.timestamp?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: LocalDate.now()) }
+    // State variable to manage the date picker visibility
     var showDatePicker by remember { mutableStateOf(false) }
+    // Check if it is a new event
     val isNewEvent = event == null
 
+    // State variable to manage the selected event type
     var selectedEventType by remember { mutableStateOf(event?.eventType ?: EventType.NOTE) }
+    // State variable to manage the description
     var description by remember { mutableStateOf(event?.description ?: "") }
+    // State variable to manage the image url
     var imageUrl by remember { mutableStateOf(event?.imageUrl) }
+    // State variable to manage the attachment
     var attachment by remember { mutableStateOf(event?.attachment) }
 
+    // Dialog to show the event
     Dialog(
+        // Callback to dismiss the dialog
         onDismissRequest = onDismiss,
+        // Properties of the dialog
         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
+        // Surface of the dialog
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -63,16 +75,17 @@ fun EventDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
+            // Content of the dialog
              Column(
                 modifier = Modifier
                     .padding(24.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // 标题
+                // Title of the dialog
                 Text(
                     text = if (isNewEvent) "添加新事件" else "编辑事件",
                     style = MaterialTheme.typography.headlineSmall
-                )
+                )                
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -109,7 +122,7 @@ fun EventDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
+                
                 // 描述输入
                 Text(
                     text = "描述",
@@ -141,7 +154,7 @@ fun EventDialog(
                     IconButton(onClick = { /* 选择图片 */ }) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = "添加图片")
                     }
-                }
+                }                
 
                 // 图片预览（如果有）
                 if (!imageUrl.isNullOrEmpty()) {
@@ -180,13 +193,14 @@ fun EventDialog(
                 Row() {
                     Button(onClick = { showDatePicker = true }) {
                         Text(selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")))
-                    }
+                    }                    
                 }
-
+                
                 // Date picker
                 if (showDatePicker) {
                     DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { Button(onClick = { showDatePicker = false }) { Text(text = "OK") } },) {
-                        DatePicker(onDateSelected = { selectedDate = it })
+                        DatePicker(onDateSelected = { selectedDate = it })                        
+                    }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -202,8 +216,8 @@ fun EventDialog(
                         style = MaterialTheme.typography.labelLarge
                     )
                     // 在实际应用中，这里应该有文件选择功能
-                    IconButton(onClick = { /* 选择附件 */ }) {
-                        Icon(Icons.Default.AttachFile, contentDescription = "添加附件")
+                    IconButton(onClick = { /* 选择附件 */ }) {                        
+                       Icon(Icons.Default.AttachFile, contentDescription = "添加附件")
                     }
                 }
                 
@@ -260,6 +274,7 @@ fun EventDialog(
                         onClick = { onSave(selectedEventType, description, imageUrl, attachment, Date.from(selectedDate.atStartOfDay(ZoneId.systemDefault()).toInstant())) },
                         enabled = description.isNotBlank()
                     ) {
+                        // Text of the save button
                         Text("保存")
                     }
                 }

@@ -13,4 +13,5 @@ plugins {
 
 task clean(type: Delete) {
     delete rootProject.buildDir 
-}
+}classpath(com.google.dagger:hilt-android-gradle-plugin:2.48.1)
+plugins { id(com.google.dagger.hilt.android) version 2.48.1 apply false }

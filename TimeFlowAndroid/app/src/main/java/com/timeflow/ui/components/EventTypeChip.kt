@@ -1,23 +1,26 @@
 package com.timeflow.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.outlined.Event // Import Icons.Outlined.Event
+import androidx.compose.material.icons.outlined.Note // Import Icons.Outlined.Note
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment.Companion.CenterVertically
+import androidx.compose.ui.Alignment.Companion.CenterVertically // Import CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.*
 import com.timeflow.model.EventType
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * 事件类型选择芯片
@@ -28,6 +31,12 @@ fun EventTypeChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    /**
+     * 根据事件类型获取对应的图标
+     *
+     * @param eventType 事件类型
+     * @return 图标
+     */
     val icon = when (eventType) {
         EventType.NOTE -> Icons.Outlined.Note
         EventType.TODO -> Icons.Outlined.CheckBox
@@ -35,6 +44,12 @@ fun EventTypeChip(
         EventType.MEMO -> Icons.Outlined.EditNote
     }
 
+    /**
+     * 根据事件类型获取对应的标签
+     *
+     * @param eventType 事件类型
+     * @return 标签
+     */
     val label = when (eventType) {
         EventType.NOTE -> "笔记"
         EventType.TODO -> "待办"
@@ -42,6 +57,12 @@ fun EventTypeChip(
         EventType.MEMO -> "备忘录"
     }
 
+    /**
+     * 根据事件类型和是否选中来决定背景颜色
+     *
+     * @param eventType 事件类型
+     * @return 背景颜色
+     */
     val containerColor = if (isSelected) {
         when (eventType) {
             EventType.NOTE -> MaterialTheme.colorScheme.tertiary
@@ -53,6 +74,12 @@ fun EventTypeChip(
         MaterialTheme.colorScheme.surfaceVariant
     }
 
+    /**
+     * 根据是否选中来决定文本颜色
+     *
+     * @param isSelected 是否选中
+     * @return 文本颜色
+     */
     val contentColor = if (isSelected) {
         MaterialTheme.colorScheme.onSurface
     } else {
@@ -60,25 +87,40 @@ fun EventTypeChip(
     }
 
     Surface(
+        // 设置组件大小和点击事件
         modifier = Modifier
             .height(40.dp)
             .clickable(onClick = onClick) ,
+        // 设置组件形状
         shape = RoundedCornerShape(20.dp),
+        // 设置组件背景颜色
         color = containerColor,
+        // 设置组件文本颜色
         contentColor = contentColor,
     ) {
+        // 水平布局
         Row(
+            // 设置内边距
             modifier = Modifier.padding(horizontal = 12.dp) ,
+            // 设置垂直居中
             verticalAlignment = CenterVertically ,
+            // 设置水平居中
             horizontalArrangement = Arrangement.Center ,
         ) {
+            // 图标
             Icon(
+                // 图标
                 imageVector = icon,
+                // 无内容描述
                 contentDescription = null,
+                // 设置大小
                 modifier = Modifier.size(16.dp) ,
             ) ,
+            // 间隔
             Spacer(modifier = Modifier.width(4.dp))
+            // 文本
             Text(
+                // 文本内容
                 text = label,
                 style = MaterialTheme.typography.labelMedium
             )
