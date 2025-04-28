@@ -11,9 +11,8 @@ import com.timeflow.model.EventType
 import com.timeflow.model.TimelineEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
+import java.time.ZoneId
 import java.util.*
 
 /**
@@ -25,50 +24,64 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     
     // 所有事件列表
     private val _events = mutableStateListOf<TimelineEvent>()
-    val events: List<TimelineEvent> get() = _events
+    val events: List<TimelineEvent> get() =_events
     
     // 搜索关键词
     private val _searchTerm = mutableStateOf("")
-    val searchTerm get() = _searchTerm.value
+    val searchTerm get() =_searchTerm.value
     
     // 当前选中的事件类型过滤器
     private val _selectedEventType = mutableStateOf<EventType?>(null)
-    val selectedEventType get() = _selectedEventType.value
+    val selectedEventType get() =_selectedEventType.value
     
     // 正在编辑的事件
     private val _editingEvent = mutableStateOf<TimelineEvent?>(null)
-    val editingEvent get() = _editingEvent.value
+    val editingEvent get() =_editingEvent.value
     
     init {
         // 加载数据
         loadEvents()
     }
-    
+
     /**
      * 加载事件数据
      */
     private fun loadEvents() {
         viewModelScope.launch {
-            timelineEventDao.getAllEvents().collectLatest { entities ->
-                _events.clear()
-                _events.addAll(entities.map { it.toTimelineEvent() })
+            _events.clear()
+            if (_searchTerm.value.isEmpty() && _selectedEventType.value == null) {
+                timelineEventDao.getAllEvents().collectLatest { entities ->
+                    _events.addAll(entities.map { it.toTimelineEvent() })
+                }
+            } else if (_searchTerm.value.isNotEmpty() && _selectedEventType.value == null) {
+                timelineEventDao.searchEvents(_searchTerm.value).collectLatest { entities ->
+                    _events.addAll(entities.map { it.toTimelineEvent() })
+                }
+            } else if (_searchTerm.value.isEmpty() && _selectedEventType.value != null) {
+                timelineEventDao.getEventsByType(_selectedEventType.value).collectLatest { entities ->
+                    _events.addAll(entities.map { it.toTimelineEvent() })
+                }
+            } else {
+                timelineEventDao.searchEventsByType(_selectedEventType.value!!.name, _searchTerm.value).collectLatest { entities ->
+                    _events.addAll(entities.map { it.toTimelineEvent() })
+                }.apply {}
             }
-        }
+         }
     }
-    
+
     /**
      * 添加新事件
-     */
-    fun addEvent(eventType: EventType, description: String, imageUrl: String? = null, attachment: TimelineEvent.Attachment? = null) {
+    **/
+    fun addEvent(eventType: EventType, description: String, imageUrl: String? = null, attachment: TimelineEvent.Attachment? = null, eventTimestamp: Date = Date()) {
         val title = TimelineEvent.deriveTitle(description)
         val newEvent = TimelineEvent(
             eventType = eventType,
             title = title,
             description = description,
             imageUrl = imageUrl,
-            attachment = attachment
+            attachment = attachment,
+            timestamp = eventTimestamp
         )
-        
         viewModelScope.launch {
             timelineEventDao.insertEvent(newEvent.toEntity())
         }
@@ -94,56 +107,38 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     }
     
     /**
-     * 设置搜索关键词
-     */
+    * 设置搜索关键词
+    **/
     fun setSearchTerm(term: String) {
         _searchTerm.value = term
-        if (term.isNotEmpty()) {
-            viewModelScope.launch {
-                timelineEventDao.searchEvents(term).collectLatest { entities ->
-                    _events.clear()
-                    _events.addAll(entities.map { it.toTimelineEvent() })
-                }
-            }
-        } else {
-            loadEvents()
-        }
+        loadEvents()
     }
-    
+
     /**
-     * 设置事件类型过滤器
-     */
+    * 设置事件类型过滤器
+    **/
     fun setEventTypeFilter(eventType: EventType?) {
         _selectedEventType.value = eventType
-        if (eventType != null) {
-            viewModelScope.launch {
-                timelineEventDao.getEventsByType(eventType.name).collectLatest { entities ->
-                    _events.clear()
-                    _events.addAll(entities.map { it.toTimelineEvent() })
-                }
-            }
-        } else {
-            loadEvents()
-        }
+        loadEvents()
     }
-    
+
     /**
-     * 设置正在编辑的事件
-     */
+    * 设置正在编辑的事件
+    **/
     fun setEditingEvent(event: TimelineEvent?) {
         _editingEvent.value = event
     }
-    
+
     /**
      * 获取过滤后的事件列表
      */
     fun getFilteredEvents(): List<TimelineEvent> {
-        return events
+        return _events
     }
     
-    /**
+  /**
      * 将TimelineEvent转换为TimelineEventEntity
-     */
+     **/
     private fun TimelineEvent.toEntity(): TimelineEventEntity {
         return TimelineEventEntity(
             id = id,
@@ -152,13 +147,13 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
             title = title,
             description = description,
             imageUrl = imageUrl,
-            attachmentName = attachment?.name
+            attachmentName = attachment?.name,
+            timestamp = timestamp
         )
     }
-    
-    /**
-     * 将TimelineEventEntity转换为TimelineEvent
-     */
+   /**
+    * 将TimelineEventEntity转换为TimelineEvent
+    **/
     private fun TimelineEventEntity.toTimelineEvent(): TimelineEvent {
         return TimelineEvent(
             id = id,
@@ -167,7 +162,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
             title = title,
             description = description,
             imageUrl = imageUrl,
-            attachment = attachmentName?.let { TimelineEvent.Attachment(it) }
+            attachment = attachmentName?.let { TimelineEvent.Attachment(it) },
+            timestamp = timestamp
         )
     }
-}

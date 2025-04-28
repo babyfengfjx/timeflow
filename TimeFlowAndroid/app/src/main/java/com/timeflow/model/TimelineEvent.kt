@@ -7,7 +7,7 @@ import java.util.UUID
  * 时间轴事件的数据模型
  */
 enum class EventType {
-    NOTE, TODO, SCHEDULE
+    NOTE, TODO, SCHEDULE, MEMO
 }
 
 data class TimelineEvent(
@@ -20,9 +20,10 @@ data class TimelineEvent(
     val attachment: Attachment? = null
 ) {
     data class Attachment(
-        val name: String
+        val name: String,
+        val path: String? = null
     )
-    
+
     companion object {
         /**
          * 从描述中提取标题
@@ -31,10 +32,10 @@ data class TimelineEvent(
          */
         fun deriveTitle(description: String?): String {
             if (description.isNullOrEmpty()) return "新事件"
-            
+
             val lines = description.split("\n")
             val firstLine = lines[0].trim()
-            
+
             return if (firstLine.isNotEmpty()) {
                 if (firstLine.length > 50) firstLine.substring(0, 47) + "..." else firstLine
             } else {
