@@ -3,4 +3,5 @@
     <include domain="sharedpref" path="."/>
     <include domain="database" path="."/>
     <include domain="file" path="."/>
+    <!-- Exclude specific shared preferences that contain GCM registration Id -->
 </full-backup-content>

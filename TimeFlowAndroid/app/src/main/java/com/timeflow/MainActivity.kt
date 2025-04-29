@@ -27,6 +27,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import javax.inject.Inject
+import androidx.compose.foundation.isSystemInDarkTheme
 
 /**
  * Main activity of the application.
@@ -45,33 +46,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val viewModel: TimelineViewModel = viewModel() // Gets the TimelineViewModel.
-            var showOnboarding by remember { mutableStateOf(false) } // State to control the onboarding visibility.
-            var isDarkTheme by remember { mutableStateOf(false) } // State to control the dark theme.
-            // Collects the app preferences and updates the showOnboarding state.
-            lifecycleScope.launch {
-                appPreferencesRepository.appPreferencesFlow.collect { appPreferences ->
-                    showOnboarding = appPreferences.showOnboarding
-                }
-            }
-            // Applies the selected theme to the app.
+            var isDarkTheme by remember { mutableStateOf(isSystemInDarkTheme()) }
+            
             TimeFlowTheme(darkTheme = isDarkTheme) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // Shows the OnboardingScreen if showOnboarding is true, otherwise shows the TimelineScreen.
-                    if (showOnboarding) {
-                        OnboardingScreen(onGetStarted = { lifecycleScope.launch { appPreferencesRepository.updateShowOnboarding(false) } })
-                    } else {
-                        TimelineScreen(
-                            viewModel = viewModel,
-                            isDarkTheme = isDarkTheme,
-                            onThemeChange = { isDarkTheme = it }
-                        )
-                    }
-
-                }
+                TimelineScreen(
+                    isDarkTheme = isDarkTheme,
+                    onThemeChange = { isDarkTheme = it }
+                )
             }
         }
     }
