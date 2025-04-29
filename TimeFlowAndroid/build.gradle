@@ -6,9 +6,7 @@ buildscript {
     }
 }
 
-plugins {
-    id("com.google.dagger.hilt.android") version "2.48.1"
-}
+
 
 task clean(type: Delete) {
     delete rootProject.buildDir
