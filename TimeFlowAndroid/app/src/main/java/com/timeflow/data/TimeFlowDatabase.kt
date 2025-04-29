@@ -9,7 +9,11 @@ import com.timeflow.data.dao.TimelineEventDao
 import com.timeflow.data.entity.TimelineEventEntity
 import com.timeflow.data.util.Converters
 
-@Database(entities = [TimelineEventEntity::class], version = 1)
+@Database(
+    entities = [TimelineEventEntity::class],
+    version = 1,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class TimeFlowDatabase : RoomDatabase() {
     abstract fun timelineEventDao(): TimelineEventDao
@@ -24,7 +28,9 @@ abstract class TimeFlowDatabase : RoomDatabase() {
                     context.applicationContext,
                     TimeFlowDatabase::class.java,
                     "timeflow_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }

@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.timeflow.data.AppPreferencesRepository
+import com.timeflow.data.TimeFlowDatabase
+import com.timeflow.data.dao.TimelineEventDao
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -13,7 +15,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import android.app.Application
 import androidx.datastore.preferences.core.Preferences
-
 import javax.inject.Singleton
 
 /**
@@ -57,4 +58,30 @@ object AppModule {
     @Provides
     @ApplicationContext
     fun provideContext(application: Application): Context = application.applicationContext
+
+    /**
+     * Provides the TimeFlowDatabase instance.
+     * @param context The application context.
+     * @return A singleton instance of TimeFlowDatabase.
+     */
+    @Singleton
+    @Provides
+    fun provideTimeFlowDatabase(
+        @ApplicationContext context: Context
+    ): TimeFlowDatabase {
+        return TimeFlowDatabase.getDatabase(context)
+    }
+
+    /**
+     * Provides the TimelineEventDao instance.
+     * @param database The TimeFlowDatabase instance.
+     * @return A singleton instance of TimelineEventDao.
+     */
+    @Singleton
+    @Provides
+    fun provideTimelineEventDao(
+        database: TimeFlowDatabase
+    ): TimelineEventDao {
+        return database.timelineEventDao()
+    }
 }

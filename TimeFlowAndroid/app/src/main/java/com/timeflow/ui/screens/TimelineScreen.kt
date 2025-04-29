@@ -1,8 +1,7 @@
 package com.timeflow.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,64 +13,35 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.CheckBox
-import androidx.compose.material.icons.outlined.EditNote
-import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material.icons.outlined.List
-import androidx.compose.material.icons.outlined.Note
-import androidx.compose.material.icons.outlined.Note
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.DismissDirection
 import androidx.compose.material.DismissValue
 import androidx.compose.material.rememberDismissState
 import androidx.compose.material3.*
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.FixedThreshold
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Color.Companion.Red
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import com.timeflow.R
 import com.timeflow.model.TimelineEvent
-import androidx.compose.material.swipeable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.rememberCoroutineScope
-import com.timeflow.ui.components.*
 import com.timeflow.viewmodel.TimelineViewModel
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material.SwipeToDismiss
-import android.widget.Toast
-import androidx.compose.material.rememberDismissState
-import java.time.LocalDate
 import kotlin.math.roundToInt
 
 /**
@@ -81,7 +51,11 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimelineScreen(viewModel: TimelineViewModel) {
+fun TimelineScreen(
+    viewModel: TimelineViewModel,
+    isDarkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
+) {
     // Load events when the screen is first launched.
     LaunchedEffect(Unit) {
         viewModel.loadEvents()
@@ -101,8 +75,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var selectedEvent by remember { mutableStateOf<TimelineEvent?>(null) }
     // State to control the visibility of the settings dialog.
     var showSettingDialog by remember { mutableStateOf(false) }
-    // State to manage the dark theme.
-    var isDarkTheme by remember { mutableStateOf(false) }
     // State to control the visibility of the add event dialog.
     var showAddEventDialog by remember { mutableStateOf(false) }
     // State to control the visibility of the edit event dialog.
@@ -111,16 +83,10 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     // State to store the event to be deleted.
     var eventToDelete by remember { mutableStateOf<TimelineEvent?>(null) }
-    // Remember the coroutine scope.
-    val coroutineScope = rememberCoroutineScope()
-    
-    // 当编辑事件变化时更新对话框状态
-    LaunchedEffect(editingEvent) {
-        showEditEventDialog = editingEvent != null
-    }
-    
     // State to control the search bar expansion.
     var searchExpanded by remember { mutableStateOf(false) }
+    // State to control the visibility of the filter menu.
+    var showFilterMenu by remember { mutableStateOf(false) }
 
     // State to manage the Snackbar.
     val snackbarHostState = remember { SnackbarHostState() }
@@ -131,32 +97,64 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     // State of the LazyColumn
     val listState = rememberLazyListState()
 
+    // Animation states
+    val searchBarHeight by animateDpAsState(
+        targetValue = if (searchExpanded) 56.dp else 0.dp,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    val filterMenuScale by animateFloatAsState(
+        targetValue = if (showFilterMenu) 1f else 0f,
+        animationSpec = tween(durationMillis = 200)
+    )
+
     Scaffold(
         topBar = {
             // Top app bar of the screen.
-
             TopAppBar(
-                title = { Text("TimeFlow") },
-                actions = { // 搜索按钮
-                    IconButton(onClick = { showSettingDialog = !showSettingDialog }) {
+                title = { 
+                    Text(
+                        "TimeFlow",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                },
+                actions = {
+                    // Theme toggle button with animation
+                    IconButton(
+                        onClick = { onThemeChange(!isDarkTheme) }
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Toggle theme"
+                        )
+                    }
+
+                    // Settings button
+                    IconButton(onClick = { showSettingDialog = true }) {
                         Icon(Icons.Outlined.Settings, contentDescription = "设置")
                     }
-                    // 设置对话框
-                    if (showSettingDialog) SettingDialog(
-                        onDismiss = { showSettingDialog = false },
-                        onThemeChange = { isDarkTheme = it },
-                        isDarkTheme = isDarkTheme
-                    )
 
-                    IconButton(onClick = { searchExpanded = !searchExpanded
-                    }) {
-                        Icon(Icons.Default.Search, contentDescription = "搜索")
+                    // Search button with animation
+                    IconButton(
+                        onClick = { searchExpanded = !searchExpanded }
+                    ) {
+                        Icon(
+                            imageVector = if (searchExpanded) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
                     }
-                    // 过滤按钮
-                    var showFilterMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = {
-                        showFilterMenu = !showFilterMenu }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "过滤")
+
+                    // Filter button with animation
+                    IconButton(
+                        onClick = { showFilterMenu = !showFilterMenu }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = "过滤",
+                            modifier = Modifier.graphicsLayer {
+                                rotationZ = if (showFilterMenu) 180f else 0f
+                            }
+                        )
                     }
                 }
             )
@@ -167,15 +165,22 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 onClick = { showAddEventDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "添加事件"
-                )
+                Icon(Icons.Default.Add, contentDescription = "添加事件")
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            // 搜索栏
-            if (searchExpanded) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // Animated search bar
+            AnimatedVisibility(
+                visible = searchExpanded,
+                enter = slideInVertically() + fadeIn(),
+                exit = slideOutVertically() + fadeOut()
+            ) {
                 SearchBar(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -197,8 +202,12 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 ) {}
             }
 
-            // 事件类型过滤器
-            if (showFilterMenu) {
+            // Animated filter menu
+            AnimatedVisibility(
+                visible = showFilterMenu,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 FilterDropdownMenu(
                     selectedEventType = selectedEventType,
                     onEventTypeSelected = {
@@ -209,7 +218,7 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                 )
             }
 
-            // TimeLine
+            // Timeline
             Box(modifier = Modifier.fillMaxSize()) {
                 //Vertical Line
                 Canvas(modifier = Modifier
@@ -321,7 +330,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
             onDismiss = { showAddEventDialog = false },
             onSave = { eventType, description, imageUrl, attachment, eventTimestamp ->
                 try {
-
                     viewModel.addEvent(eventType, description, imageUrl, attachment, eventTimestamp)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -340,12 +348,11 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     // Edit event dialog.
     if (showEditEventDialog && editingEvent != null) {
         // Edit event dialog.
-
         EventDialog(
             event = editingEvent,
             onDismiss = { 
                 viewModel.setEditingEvent(null)
-                        showEditEventDialog = false
+                showEditEventDialog = false
             },
             onSave = { eventType, description, imageUrl, attachment, eventTimestamp ->
                 val updatedEvent = editingEvent.copy(
@@ -357,7 +364,6 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
                     timestamp = eventTimestamp
                 )
                 try {
-
                     viewModel.updateEvent(updatedEvent)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -421,12 +427,18 @@ fun TimelineScreen(viewModel: TimelineViewModel) {
     if (showEventDetailDialog && selectedEvent != null) {
         EventDetailDialog(
             event = selectedEvent!!,
-            onDismiss = { showEventDetailDialog = false
-
-            }
-        })
+            onDismiss = { showEventDetailDialog = false }
+        )
     }
- }
+
+    if (showSettingDialog) {
+        SettingDialog(
+            onDismiss = { showSettingDialog = false },
+            onThemeChange = onThemeChange,
+            isDarkTheme = isDarkTheme
+        )
+    }
+}
 
 /**
 * Reorder the item.
@@ -560,49 +572,6 @@ fun DateHeader(date: LocalDate) {
     ) {
         Spacer(modifier = Modifier.width(80.dp))
         Text(text = formattedDate, style = MaterialTheme.typography.headlineSmall)
-    }
-}
-
-@Composable
-fun DateHeader(date: LocalDate) {
-    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd EEEE")
-    val formattedDate = date.format(dateFormatter)
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(modifier = Modifier.width(80.dp))
-        Text(
-            text = formattedDate,
-                            model = event.imageUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    // Attachment
-                    event.attachment?.let { attachment ->
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.AttachFile,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = attachment.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-        )
     }
 }
 

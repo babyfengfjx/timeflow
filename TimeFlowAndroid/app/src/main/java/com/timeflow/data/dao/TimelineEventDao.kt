@@ -10,15 +10,12 @@ interface TimelineEventDao {
     @Query("SELECT * FROM timeline_events ORDER BY timestamp DESC")
     fun getAllEvents(): Flow<List<TimelineEventEntity>>
     
-     @Query("SELECT * FROM timeline_events WHERE eventType = :eventType ORDER BY timestamp DESC")
+    @Query("SELECT * FROM timeline_events WHERE eventType = :eventType ORDER BY timestamp DESC")
     fun getEventsByType(eventType: String): Flow<List<TimelineEventEntity>>
 
     @Query("SELECT * FROM timeline_events WHERE eventType = :eventType AND (title LIKE '%' || :searchTerm || '%' OR description LIKE '%' || :searchTerm || '%') ORDER BY timestamp DESC")
     fun searchEventsByType(eventType: String, searchTerm: String): Flow<List<TimelineEventEntity>>
     
-    @Query("SELECT * FROM timeline_events WHERE eventType = :eventType AND (title LIKE '%' || :searchTerm || '%' OR description LIKE '%' || :searchTerm || '%') ORDER BY timestamp DESC")
-    fun searchEventsByType(eventType: String, searchTerm: String): Flow<List<TimelineEventEntity>>
-
     @Query("SELECT * FROM timeline_events WHERE title LIKE '%' || :searchTerm || '%' OR description LIKE '%' || :searchTerm || '%' ORDER BY timestamp DESC")
     fun searchEvents(searchTerm: String): Flow<List<TimelineEventEntity>>
     

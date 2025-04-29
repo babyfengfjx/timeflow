@@ -26,7 +26,6 @@ import java.util.*
 @HiltViewModel
 class TimelineViewModel @Inject constructor(application: Application, savedStateHandle: SavedStateHandle) : AndroidViewModel(application) {
     
-
     private val database = TimeFlowDatabase.getDatabase(application)
     // DAO for database operations
     private val timelineEventDao = database.timelineEventDao()
@@ -38,7 +37,7 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
     /**
     * All events list.
     */
-    val events: List<TimelineEvent> get() =_events
+    val events: List<TimelineEvent> get() = _events.value
     
     /**
     * The search term used to filter events.
@@ -47,7 +46,7 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
     /**
     * The search term used to filter events.
     */
-    val searchTerm get() =_searchTerm.value
+    val searchTerm get() = _searchTerm.value
     
     /**
     * The selected event type used to filter events.
@@ -56,7 +55,7 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
     /**
     * The selected event type used to filter events.
     */
-    val selectedEventType get() =_selectedEventType.value
+    val selectedEventType get() = _selectedEventType.value
     
     /**
     * The event that is currently being edited.
@@ -65,7 +64,15 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
     /**
     * The event that is currently being edited.
     */
-    val editingEvent get() =_editingEvent.value
+    val editingEvent get() = _editingEvent.value
+
+    private val _isLoading = mutableStateOf(false)
+    val isLoading get() = _isLoading.value
+
+    private val _error = mutableStateOf<String?>(null)
+    val error get() = _error.value
+
+    private val _cache = mutableStateOf<Map<String, TimelineEvent>>(emptyMap())
     
     init {
         // 加载数据
@@ -76,30 +83,39 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
      * 加载事件数据
      */
     private fun loadEvents() {
-        try {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _error.value = null
                 _events.value.clear()
-                if (_searchTerm.value.isEmpty() && _selectedEventType.value == null) {
-                    timelineEventDao.getAllEvents().collectLatest { entities ->
-                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                
+                val flow = when {
+                    _searchTerm.value.isEmpty() && _selectedEventType.value == null -> {
+                        timelineEventDao.getAllEvents()
                     }
-                } else if (_searchTerm.value.isNotEmpty() && _selectedEventType.value == null) {
-                    timelineEventDao.searchEvents(_searchTerm.value).collectLatest { entities ->
-                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    _searchTerm.value.isNotEmpty() && _selectedEventType.value == null -> {
+                        timelineEventDao.searchEvents(_searchTerm.value)
                     }
-                } else if (_searchTerm.value.isEmpty() && _selectedEventType.value != null) {
-                    timelineEventDao.getEventsByType(_selectedEventType.value).collectLatest { entities ->
-                        _events.value.addAll(entities.map { it.toTimelineEvent() })
+                    _searchTerm.value.isEmpty() && _selectedEventType.value != null -> {
+                        timelineEventDao.getEventsByType(_selectedEventType.value!!.name)
                     }
-                } else {
-                    timelineEventDao.searchEventsByType(_selectedEventType.value!!.name, _searchTerm.value).collectLatest { entities ->
-                        _events.value.addAll(entities.map { it.toTimelineEvent() })
-                    }.apply { }
+                    else -> {
+                        timelineEventDao.searchEventsByType(_selectedEventType.value!!.name, _searchTerm.value)
+                    }
                 }
+                
+                flow.collectLatest { entities ->
+                    val newEvents = entities.map { it.toTimelineEvent() }
+                    _events.value.addAll(newEvents)
+                    // Update cache
+                    _cache.value = _cache.value + newEvents.associateBy { it.id }
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "加载事件失败"
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            _events.clear()
         }
     }
     
@@ -107,21 +123,25 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
      * 添加新事件
     **/
     fun addEvent(eventType: EventType, description: String, imageUrl: String? = null, attachment: TimelineEvent.Attachment? = null, eventTimestamp: Date = Date()) {
-        val title = TimelineEvent.deriveTitle(description)
-        val newEvent = TimelineEvent(
-            eventType = eventType,
-            title = title,
-            description = description,
-            imageUrl = imageUrl,
-            attachment = attachment,
-            timestamp = eventTimestamp
-        )
-        try {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            try {
+                _error.value = null
+                val title = TimelineEvent.deriveTitle(description)
+                val newEvent = TimelineEvent(
+                    eventType = eventType,
+                    title = title,
+                    description = description,
+                    imageUrl = imageUrl,
+                    attachment = attachment,
+                    timestamp = eventTimestamp
+                )
                 timelineEventDao.insertEvent(newEvent.toEntity())
+                // Update cache
+                _cache.value = _cache.value + (newEvent.id to newEvent)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "添加事件失败"
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
     
@@ -129,26 +149,34 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
      * 更新事件
      */
     fun updateEvent(updatedEvent: TimelineEvent) {
-        try {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            try {
+                _error.value = null
                 timelineEventDao.updateEvent(updatedEvent.toEntity())
+                // Update cache
+                _cache.value = _cache.value + (updatedEvent.id to updatedEvent)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "更新事件失败"
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            _editingEvent.value = null // 清除编辑状态
         }
-        _editingEvent.value = null // 清除编辑状态
     }
     
     /** 
      * 删除事件
     */
     fun deleteEvent(id: String) {
-        try {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            try {
+                _error.value = null
                 timelineEventDao.deleteEventById(id)
+                // Remove from cache
+                _cache.value = _cache.value - id
+            } catch (e: Exception) {
+                _error.value = e.message ?: "删除事件失败"
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
     
@@ -205,6 +233,12 @@ class TimelineViewModel @Inject constructor(application: Application, savedState
      */
     fun updateEvents(events: List<TimelineEvent>) {
         _events.value = events.toMutableList()
+        // Update cache
+        _cache.value = events.associateBy { it.id }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }
    /**
